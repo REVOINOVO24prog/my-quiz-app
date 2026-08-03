@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Section {{ section_id }} - Quiz</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #0d0d0d; color: #fff; margin: 0; padding: 20px; }
+        
+        .quiz-container {
+            display: grid;
+            grid-template-columns: 1fr 120px;
+            gap: 20px;
+            max-width: 1100px;
+            margin: auto;
+            background: #151515;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+        }
+
+        .header-bar {
+            grid-column: span 2;
+            background: #000;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .content-area {
+            display: flex;
+            gap: 15px;
+            min-height: 380px;
+        }
+
+        .left-pane { flex: 1; display: flex; flex-direction: column; gap: 15px; }
+        .table-pane {
+            flex: 1;
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 10px;
+            overflow-y: auto;
+            max-height: 400px;
+            font-family: monospace;
+            display: none;
+        }
+
+        .question-box {
+            background: linear-gradient(180deg, #2a2a2a, #1a1a1a);
+            padding: 15px;
+            border-radius: 8px;
+            min-height: 80px;
+            font-size: 16px;
+        }
+
+        .options-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 250px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .option-btn {
+            background: linear-gradient(180deg, #333, #1f1f1f);
+            border: 1px solid #444;
+            border-radius: 25px;
+            padding: 12px 20px;
+            color: #fff;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: all 0.2s;
+        }
+
+        .option-btn .radio-dot {
+            width: 12px; height: 12px; border-radius: 50%; border: 2px solid #aaa;
+        }
+
+        .option-btn.correct {
+            background: #004d40 !important;
+            border-color: #00e676 !important;
+            box-shadow: 0 0 12px #00e676;
+        }
+        .option-btn.correct .radio-dot { background: #00e676; border-color: #00e676; }
+
+        .option-btn.wrong {
+            background: #4a0000 !important;
+            border-color: #ff1744 !important;
+            box-shadow: 0 0 12px #ff1744;
+        }
+        .option-btn.wrong .radio-dot { background: #ff1744; border-color: #ff1744; }
+
+        .sidebar { display: flex; flex-direction: column; align-items: center; gap: 15px; }
+        .stats-box {
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 10px 15px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .stat-row { display: flex; justify-content: space-between; margin: 8px 0; font-weight: bold; }
+        .stat-val { background: #222; padding: 2px 8px; border-radius: 4px; border: 1px solid #444; }
+
+        .action-btn {
+            width: 100%;
+            padding: 12px 0;
+            border: none;
+            border-radius: 20px;
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0,229,255,0.4);
+            background: #00e5ff;
+        }
+        .action-btn:hover { opacity: 0.9; }
+        .action-btn.done { background: #00e5ff; }
+        .action-btn.nav { background: #80d8ff; }
+    </style>
+</head>
+<body>
+
+<!-- Hidden JSON script tag prevents VS Code JS syntax errors -->
+<script id="questions-data" type="application/json">
+    {{ questions|tojson }}
+</script>
+
+<div class="quiz-container">
+    <div class="header-bar">
+        <span>Section {{ section_id }}</span>
+        <span id="q-number-title">Question 1</span>
+    </div>
+
+    <div class="content-area">
+        <div class="left-pane">
+            <div class="question-box" id="question-text">
+                Loading Question...
+            </div>
+            
+            <div class="options-container" id="options-box">
+                <!-- Dynamic Options render here -->
+            </div>
+        </div>
+
+        <div class="table-pane" id="table-view">
+            <!-- Dynamic Side-by-side Table / Column Render -->
+        </div>
+    </div>
+
+    <div class="sidebar">
+        <div class="stats-box">
+            <div class="stat-row"><span>A</span><span class="stat-val" id="stat-a">0</span></div>
+            <div class="stat-row"><span>R</span><span class="stat-val" id="stat-r">0</span></div>
+            <div class="stat-row"><span>W</span><span class="stat-val" id="stat-w">0</span></div>
+            <div class="stat-row"><span>N</span><span class="stat-val" id="stat-n">0</span></div>
+        </div>
+
+        <button class="action-btn done" onclick="finishQuiz()">DONE</button>
+        <button class="action-btn nav" onclick="prevQuestion()">PRV</button>
+        <button class="action-btn nav" onclick="nextQuestion()">NXT</button>
+    </div>
+</div>
+
+<script>
+    // Parse JSON safely from HTML container
+    const questions = JSON.parse(document.getElementById('questions-data').textContent);
+    const sectionId = "{{ section_id }}";
+    let currentIndex = 0;
+    let userAnswers = {};
+
+    function renderQuestion() {
+        if (!questions || questions.length === 0) {
+            document.getElementById('question-text').innerText = "No questions found in this section.";
+            return;
+        }
+
+        const q = questions[currentIndex];
+        document.getElementById('q-number-title').innerText = `Question ${currentIndex + 1} / ${questions.length}`;
+        document.getElementById('question-text').innerText = q.question;
+
+        const optsContainer = document.getElementById('options-box');
+        optsContainer.innerHTML = '';
+
+        Object.keys(q.options).forEach(key => {
+            const btn = document.createElement('div');
+            btn.className = 'option-btn';
+            btn.innerHTML = `<div class="radio-dot"></div> <div><strong>${key}.</strong> ${q.options[key]}</div>`;
+
+            if (userAnswers[currentIndex]) {
+                const selected = userAnswers[currentIndex];
+                if (key === q.answer) {
+                    btn.classList.add('correct');
+                }
+                if (key === selected && selected !== q.answer) {
+                    btn.classList.add('wrong');
+                }
+            } else {
+                btn.onclick = () => handleAnswer(key);
+            }
+
+            optsContainer.appendChild(btn);
+        });
+
+        const tablePane = document.getElementById('table-view');
+        if (q.table && q.table.trim() !== "") {
+            tablePane.style.display = 'block';
+            tablePane.innerHTML = q.table;
+        } else {
+            tablePane.style.display = 'none';
+        }
+
+        updateCounters();
+    }
+
+    function handleAnswer(selectedKey) {
+        if (userAnswers[currentIndex]) return;
+        userAnswers[currentIndex] = selectedKey;
+        renderQuestion();
+    }
+
+    function updateCounters() {
+        let attempted = 0;
+        let right = 0;
+        let wrong = 0;
+
+        Object.keys(userAnswers).forEach(idx => {
+            attempted++;
+            if (userAnswers[idx] === questions[idx].answer) {
+                right++;
+            } else {
+                wrong++;
+            }
+        });
+
+        const total = questions.length;
+        const notAttempted = total - attempted;
+
+        document.getElementById('stat-a').innerText = attempted;
+        document.getElementById('stat-r').innerText = right;
+        document.getElementById('stat-w').innerText = wrong;
+        document.getElementById('stat-n').innerText = notAttempted;
+    }
+
+    function prevQuestion() {
+        if (currentIndex > 0) {
+            currentIndex--;
+            renderQuestion();
+        }
+    }
+
+    function nextQuestion() {
+        if (currentIndex < questions.length - 1) {
+            currentIndex++;
+            renderQuestion();
+        }
+    }
+
+    function finishQuiz() {
+        const total = questions.length;
+        const attempted = Object.keys(userAnswers).length;
+        const progressPct = Math.round((attempted / total) * 100);
+        const isCompleted = attempted === total;
+
+        fetch('/api/submit_quiz', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                section_id: sectionId,
+                progress: progressPct,
+                completed: isCompleted
+            })
+        }).then(() => {
+            window.location.href = '/dashboard';
+        });
+    }
+
+    renderQuestion();
+</script>
+
+</body>
+</html>
