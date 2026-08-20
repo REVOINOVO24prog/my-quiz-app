@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: my-quiz-app-prod-2026
+    runtime: python
+    repo: https://github.com/REVOINOVO24prog/my-quiz-app
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    plan: free
